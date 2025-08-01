@@ -35,9 +35,9 @@ HBOND_DISTANCE_CUTOFF = 3.5  # angstron
 HBOND_ANGLE_CUTOFF = 0.666667*math.pi # pi
 
 PROGS = { "I-interpret":"/home/qyfu/Software/I-interpret/bin/I-interpret",
-          "pdbconvert":"/home/qyfu/Software/schrodinger2016-2/utilities/pdbconvert",
-          "hetgrp_ffgen":"/home/qyfu/Software/schrodinger2016-2/utilities/hetgrp_ffgen",
-          "opls_to_gmx":"/home/qyfu/.ffallrain/MyScripts/opls2005_to_gmx.py",
+          "pdbconvert":"/home/qcxia/opt/schrodinger2021-2/utilities/pdbconvert",
+          "hetgrp_ffgen":"/home/qcxia/opt/schrodinger2021-2/utilities/hetgrp_ffgen",
+          "opls_to_gmx":"/home/qcxia/.local/bin/opls2005_to_gmx.py",
         }
 
 if True: ### residue names 
@@ -113,7 +113,7 @@ if True: ### Global varieties
     babel = '/usr/bin/babel'
 
 class fATOM():
-    def __init__(self,atom_line = None):
+    def __init__(self,atom_line = None, compromise=False):
         if atom_line == None:
             atom_line = "ATOM      1  X   DEF     1       0.000   0.000   0.000  1.00  0.00           X"        
 
@@ -148,7 +148,10 @@ class fATOM():
         self.eps = None
         self.conf = atom_line[16]
         try:
-            self.index = int(atom_line[6:11])
+            if not compromise:
+                self.index = int(atom_line[6:11])
+            else:
+                self.index = int(atom_line[6:12]) # to deal with atom index > 99999
         except:
             self.index = 9999
         x = float(atom_line[30:38])
@@ -190,10 +193,14 @@ class fATOM():
 
 class fCHEMO():
     @staticmethod
-    def _next_atom_line(resi_lines):
+    def _next_atom_line(resi_lines,compromise=False):
         for atom_line in resi_lines:
-            if len(atom_line)>=6 and atom_line[:6] in ('HETATM','ATOM  '):
-                yield atom_line
+            if not compromise:
+                if len(atom_line)>=6 and atom_line[:6] in ('HETATM','ATOM  '):
+                    yield atom_line
+            else:
+                if len(atom_line)>=6 and atom_line[:5] in ('ATOM '):
+                    yield atom_line
 
     ### Did not finished !
     def addH(self,keep_current = False,nc = 0 ):
@@ -318,7 +325,7 @@ class fCHEMO():
             print(("##### Load parameter Fail: %s"%self.name))
             print((e.message))
 
-    def __init__(self,resi_lines=None,conf='OCC'):
+    def __init__(self,resi_lines=None,conf='OCC',compromise=False):
         if resi_lines == None:
             resi_lines = list()
         try:
@@ -335,8 +342,8 @@ class fCHEMO():
         self.atoms = list()
         self.index_shift = 0
             
-        for atom_line in fRESIDUE._next_atom_line(resi_lines):
-            self.atoms.append( fATOM(atom_line) )
+        for atom_line in fRESIDUE._next_atom_line(resi_lines,compromise):
+            self.atoms.append( fATOM(atom_line,compromise) )
         if len(self.atoms)>0:
             self.index_shift = self.atoms[0].index - 1
         else:
@@ -765,7 +772,7 @@ class fTOPOLOGY():
             if len(line)<6 or line[:6] not in ('ATOM  ','HETATM'):
                 continue
             else:
-                resindex = line[22:26].strip()+line[21]
+                resindex = line[22:26].strip()+line[21]+line[26] # resindex + chainid + insertioncode
                 if resindex == oldresindex or oldresindex == None:
                     resi_lines.append(line)
                 else:
@@ -775,11 +782,11 @@ class fTOPOLOGY():
             oldresindex = resindex
         yield resi_lines
 
-    def __init__(self,lines,conf = 'OCC'):
+    def __init__(self,lines,conf = 'OCC',compromise=False):
         self.residues = list()
         for resi_lines in fTOPOLOGY._next_resi_lines(lines):
             if len( resi_lines ) > 0 :
-                self.residues.append( fRESIDUE(resi_lines,conf='OCC') )
+                self.residues.append( fRESIDUE(resi_lines,conf='OCC',compromise=compromise) )
         self.residues_d = dict()
         for resi in self.residues:
             if resi.index in self.residues_d:
@@ -859,7 +866,7 @@ class fTOPOLOGY():
             residue.write_pdb(ofp)
 
 class fPDB:
-    def __init__(self,frame = None, fragmentation=False, conf = 'OCC'):
+    def __init__(self,frame = None, fragmentation=False, conf = 'OCC',compromise=False):
         lines = None
         if hasattr(frame,'isalpha'):
             lines = open(frame).readlines()
@@ -893,7 +900,7 @@ class fPDB:
           from .frag import fFRAGTOPO
           self.topology = fFRAGTOPO(lines)
         else:
-          self.topology = fTOPOLOGY(lines,conf = 'OCC')
+          self.topology = fTOPOLOGY(lines,conf = 'OCC',compromise=compromise)
 
     @staticmethod
     def load_ff_param_resi(resi,gmxtop):
