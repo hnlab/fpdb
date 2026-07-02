@@ -16,7 +16,7 @@ def next_traj_pdb(trajpdb):
 
 if __name__ == "__main__":
     input_trajpdb = sys.argv[1]
-    os.system(f"{input_trajpdb} {input_trajpdb}.bak.pdb")
+    os.system(f"cp {input_trajpdb} {input_trajpdb}.bak.pdb") # backup
     with open(input_trajpdb,"w") as f:
         for pdbblock in next_traj_pdb(f"{input_trajpdb}.bak.pdb"):
             f.write(pdbblock)
